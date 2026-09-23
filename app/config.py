@@ -1,0 +1,20 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    service_name: str = "card-service"
+    api_port: int = 8005
+
+    database_url: str = (
+        "postgresql+psycopg2://banklite:banklite@card-db:5432/card_db"
+    )
+
+    account_service_url: str = "http://account-service:8002"
+    account_timeout_seconds: float = 5.0
+
+    rabbitmq_url: str = "amqp://banklite:banklite@rabbitmq:5672/"
+    events_exchange: str = "banklite.events"
+    enable_events: bool = True
+
+settings = Settings()
