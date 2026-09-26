@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="BankLite - Card Service",
-    description="Microservicio de Emisi?n y Administraci?n de Tarjetas (F?sicas/Virtuales) y Autorizaciones de Transacciones.",
+    description="Microservicio de Emisión y Administración de Tarjetas (Físicas/Virtuales) y Autorizaciones de Transacciones.",
     version="1.0.0",
     lifespan=lifespan,
 )
