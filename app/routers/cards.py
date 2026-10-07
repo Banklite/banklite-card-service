@@ -18,8 +18,11 @@ router = APIRouter(prefix="/cards", tags=["Cards"])
 
 @router.post("/", response_model=TarjetaOut, status_code=status.HTTP_201_CREATED)
 def emitir_tarjeta(payload: TarjetaCreate, db: Session = Depends(get_db)):
+    import random
+    numero_aleatorio = "".join([str(random.randint(0, 9)) for _ in range(16)])
     tarjeta = Tarjeta(
         id_cuenta=payload.id_cuenta,
+        numero_tarjeta=numero_aleatorio,
         tipo_tarjeta=payload.tipo_tarjeta,
         procesador_externo=payload.procesador_externo,
         estado=payload.estado

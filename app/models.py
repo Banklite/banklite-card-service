@@ -9,6 +9,7 @@ class Tarjeta(Base):
     __tablename__ = "tarjeta"
 
     id_tarjeta = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    numero_tarjeta = Column(String(16), unique=True, nullable=True)
     id_cuenta = Column(UUID(as_uuid=True), nullable=False, index=True)
     tipo_tarjeta = Column(String(50), nullable=False)
     procesador_externo = Column(String(100), nullable=False)

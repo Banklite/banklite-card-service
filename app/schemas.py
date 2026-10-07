@@ -40,6 +40,7 @@ class AutorizacionOut(BaseModel):
 
 class TarjetaOut(BaseModel):
     id_tarjeta: UUID
+    numero_tarjeta: Optional[str] = None
     id_cuenta: UUID
     tipo_tarjeta: str
     procesador_externo: str

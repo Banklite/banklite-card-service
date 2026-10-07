@@ -10,9 +10,14 @@ from .routers import cards
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(settings.service_name)
 
+from sqlalchemy import text
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # Migración idempotente: agregar numero_tarjeta si no existe
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tarjeta ADD COLUMN IF NOT EXISTS numero_tarjeta VARCHAR(16);"))
     logger.info("%s iniciado en puerto %d", settings.service_name, settings.api_port)
     yield
 
