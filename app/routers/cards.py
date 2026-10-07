@@ -13,7 +13,7 @@ from ..schemas import (
     AutorizacionCreate, AutorizacionOut
 )
 from ..events import publish_event, EVENT_CARD_AUTHORIZED
-from ..clients import get_account, get_user, registrar_bono_bienvenida
+from ..clients import get_account, get_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cards", tags=["Cards"])
@@ -92,14 +92,6 @@ def solicitar_tarjeta_cliente(payload: TarjetaSolicitudCliente, db: Session = De
         # Idempotente: devuelve la tarjeta existente en lugar de crear otra
         return tarjeta_existente
 
-    # ── Verificar si es la PRIMERA tarjeta de esta cuenta (cualquier estado) ─
-    cantidad_tarjetas_previas = (
-        db.query(Tarjeta)
-        .filter(Tarjeta.id_cuenta == payload.id_cuenta)
-        .count()
-    )
-    es_primera_tarjeta = cantidad_tarjetas_previas == 0
-
     # ── REGLA 5: Datos sensibles generados por backend ──────────────────────
     import random
     numero_tarjeta = "".join([str(random.randint(0, 9)) for _ in range(16)])
@@ -114,14 +106,6 @@ def solicitar_tarjeta_cliente(payload: TarjetaSolicitudCliente, db: Session = De
     db.add(tarjeta)
     db.commit()
     db.refresh(tarjeta)
-
-    # ── BONO DE BIENVENIDA: Solo la primera tarjeta emitida ──────────────────
-    if es_primera_tarjeta:
-        logger.info(
-            "Primera tarjeta emitida para cuenta %s – registrando bono de bienvenida de $2,000,000 COP",
-            payload.id_cuenta,
-        )
-        registrar_bono_bienvenida(str(payload.id_cuenta))
 
     return tarjeta
 

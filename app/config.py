@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     account_service_url: str = "http://account-service:8002"
     account_timeout_seconds: float = 5.0
 
+    identity_service_url: str = "http://identity-service:8001"
+
     rabbitmq_url: str = "amqp://banklite:banklite@rabbitmq:5672/"
     events_exchange: str = "banklite.events"
     enable_events: bool = True
