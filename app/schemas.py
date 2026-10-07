@@ -9,6 +9,17 @@ class TarjetaCreate(BaseModel):
     procesador_externo: str = Field(default="Visa Direct / Marqeta")
     estado: Literal["activa", "bloqueada", "vencida"] = "activa"
 
+
+class TarjetaSolicitudCliente(BaseModel):
+    """Schema para que el propio usuario solicite su tarjeta.
+    El usuario solo puede especificar id_usuario, id_cuenta y tipo_tarjeta.
+    Los datos sensibles (número, CVV, estado, procesador) los genera el backend.
+    """
+    id_usuario: UUID
+    id_cuenta: UUID
+    tipo_tarjeta: Literal["virtual", "fisica"] = "virtual"
+
+
 class BloqueoCreate(BaseModel):
     motivo: str = Field(..., min_length=3, max_length=255)
 
@@ -40,6 +51,7 @@ class AutorizacionOut(BaseModel):
 
 class TarjetaOut(BaseModel):
     id_tarjeta: UUID
+    numero_tarjeta: Optional[str] = None
     id_cuenta: UUID
     tipo_tarjeta: str
     procesador_externo: str

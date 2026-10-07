@@ -10,9 +10,36 @@ from .routers import cards
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(settings.service_name)
 
+from sqlalchemy import text
+
+def _rellenar_numeros_tarjeta() -> None:
+    """Asigna numero_tarjeta (16 digitos unicos) a tarjetas antiguas con NULL."""
+    import random
+    from .database import SessionLocal
+    from .models import Tarjeta
+
+    with SessionLocal() as db:
+        pendientes = db.query(Tarjeta).filter(Tarjeta.numero_tarjeta.is_(None)).all()
+        usados = {n for (n,) in db.query(Tarjeta.numero_tarjeta).filter(Tarjeta.numero_tarjeta.isnot(None))}
+        for t in pendientes:
+            while True:
+                n = "".join(str(random.randint(0, 9)) for _ in range(16))
+                if n not in usados:
+                    usados.add(n)
+                    t.numero_tarjeta = n
+                    break
+        db.commit()
+        if pendientes:
+            logger.info("Numero asignado a %d tarjetas antiguas", len(pendientes))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # Migración idempotente: agregar numero_tarjeta si no existe
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tarjeta ADD COLUMN IF NOT EXISTS numero_tarjeta VARCHAR(16);"))
+    _rellenar_numeros_tarjeta()
     logger.info("%s iniciado en puerto %d", settings.service_name, settings.api_port)
     yield
 
