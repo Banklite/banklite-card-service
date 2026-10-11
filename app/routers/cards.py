@@ -195,6 +195,25 @@ def desbloquear_tarjeta(id_tarjeta: UUID, db: Session = Depends(get_db)):
     return tarjeta
 
 
+@router.patch("/{id_tarjeta}/toggle-freeze", response_model=TarjetaOut)
+def toggle_freeze_tarjeta(id_tarjeta: UUID, db: Session = Depends(get_db)):
+    """Congela una tarjeta activa o descongela una congelada."""
+    tarjeta = db.query(Tarjeta).filter(Tarjeta.id_tarjeta == id_tarjeta).first()
+    if not tarjeta:
+        raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
+
+    if tarjeta.estado == "activa":
+        tarjeta.estado = "congelada"
+    elif tarjeta.estado == "congelada":
+        tarjeta.estado = "activa"
+    else:
+        raise HTTPException(status_code=400, detail="No se puede cambiar el estado de esta tarjeta")
+
+    db.commit()
+    db.refresh(tarjeta)
+    return tarjeta
+
+
 @router.delete("/{id_tarjeta}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_tarjeta(id_tarjeta: UUID, db: Session = Depends(get_db)):
     """Elimina / anula una tarjeta (solo administrador). Pone estado vencida."""

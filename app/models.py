@@ -17,7 +17,7 @@ class Tarjeta(Base):
     fecha_emision = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (
-        CheckConstraint("estado IN ('activa', 'bloqueada', 'vencida')", name="chk_tarjeta_estado"),
+        CheckConstraint("estado IN ('activa', 'bloqueada', 'vencida', 'congelada')", name="chk_tarjeta_estado"),
     )
 
     autorizaciones = relationship("Autorizacion", back_populates="tarjeta", cascade="all, delete-orphan")

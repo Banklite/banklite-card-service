@@ -39,6 +39,13 @@ async def lifespan(app: FastAPI):
     # Migración idempotente: agregar numero_tarjeta si no existe
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE tarjeta ADD COLUMN IF NOT EXISTS numero_tarjeta VARCHAR(16);"))
+    # Migración idempotente: permitir el estado 'congelada' en el CHECK de estado
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tarjeta DROP CONSTRAINT IF EXISTS chk_tarjeta_estado;"))
+        conn.execute(text(
+            "ALTER TABLE tarjeta ADD CONSTRAINT chk_tarjeta_estado CHECK "
+            "(estado IN ('activa','bloqueada','vencida','congelada'));"
+        ))
     _rellenar_numeros_tarjeta()
     logger.info("%s iniciado en puerto %d", settings.service_name, settings.api_port)
     yield
