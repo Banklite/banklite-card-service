@@ -13,6 +13,10 @@ class Tarjeta(Base):
     id_cuenta = Column(UUID(as_uuid=True), nullable=False, index=True)
     tipo_tarjeta = Column(String(50), nullable=False)
     procesador_externo = Column(String(100), nullable=False)
+    bin_marca = Column(String(50), nullable=True)
+    bin_banco = Column(String(120), nullable=True)
+    bin_pais = Column(String(60), nullable=True)
+    bin_tipo = Column(String(30), nullable=True)
     estado = Column(String(20), nullable=False, default="activa")
     fecha_emision = Column(DateTime, default=datetime.utcnow, nullable=False)
 

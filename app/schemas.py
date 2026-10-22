@@ -57,6 +57,10 @@ class TarjetaOut(BaseModel):
     procesador_externo: str
     estado: str
     fecha_emision: datetime
+    bin_marca: Optional[str] = None
+    bin_banco: Optional[str] = None
+    bin_pais: Optional[str] = None
+    bin_tipo: Optional[str] = None
     bloqueos: List[BloqueoOut] = []
 
     class Config:

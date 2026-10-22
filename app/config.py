@@ -15,6 +15,12 @@ class Settings(BaseSettings):
 
     identity_service_url: str = "http://identity-service:8001"
 
+    ledger_service_url: str = "http://ledger-service:8003"
+    ledger_timeout_seconds: float = 20.0
+
+    # Prefijo BIN usado al emitir tarjetas (se enriquece con handyapi/binlist)
+    card_bin_prefix: str = "441119"
+
     rabbitmq_url: str = "amqp://banklite:banklite@rabbitmq:5672/"
     events_exchange: str = "banklite.events"
     enable_events: bool = True

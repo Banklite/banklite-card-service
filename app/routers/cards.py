@@ -1,4 +1,6 @@
 import logging
+import uuid
+from decimal import Decimal
 from uuid import UUID
 from datetime import datetime
 from typing import List, Optional
@@ -14,9 +16,31 @@ from ..schemas import (
 )
 from ..events import publish_event, EVENT_CARD_AUTHORIZED
 from ..clients import get_account, get_user
+from ..bin_lookup import consultar_bin
+from ..config import settings
+from ..ledger_client import LedgerRejected, LedgerUnavailable, cobrar_compra, saldo_cuenta
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cards", tags=["Cards"])
+
+
+def _generar_numero_tarjeta() -> str:
+    """Genera un PAN de 16 digitos usando el BIN configurado (por defecto Visa/MC demo)."""
+    import random
+    prefijo = "".join(c for c in settings.card_bin_prefix if c.isdigit())[:6] or "539983"
+    resto = "".join(str(random.randint(0, 9)) for _ in range(16 - len(prefijo)))
+    return prefijo + resto
+
+
+def _campos_bin(numero_tarjeta: str) -> dict:
+    """Datos reales del BIN via binlist.net (vacio si no se pudo consultar)."""
+    info = consultar_bin(numero_tarjeta) or {}
+    return {
+        "bin_marca": info.get("marca"),
+        "bin_banco": info.get("banco"),
+        "bin_pais": info.get("pais"),
+        "bin_tipo": info.get("tipo"),
+    }
 
 
 @router.post("/", response_model=TarjetaOut, status_code=status.HTTP_201_CREATED)
@@ -24,14 +48,14 @@ def emitir_tarjeta(payload: TarjetaCreate, db: Session = Depends(get_db)):
     """Emite una tarjeta asociada a una cuenta.
     Usado exclusivamente por el administrador.
     """
-    import random
-    numero_aleatorio = "".join([str(random.randint(0, 9)) for _ in range(16)])
+    numero_aleatorio = _generar_numero_tarjeta()
     tarjeta = Tarjeta(
         id_cuenta=payload.id_cuenta,
         numero_tarjeta=numero_aleatorio,
         tipo_tarjeta=payload.tipo_tarjeta,
         procesador_externo=payload.procesador_externo,
-        estado=payload.estado
+        estado=payload.estado,
+        **_campos_bin(numero_aleatorio),
     )
     db.add(tarjeta)
     db.commit()
@@ -58,10 +82,12 @@ def solicitar_tarjeta_cliente(payload: TarjetaSolicitudCliente, db: Session = De
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado",
         )
-    if usuario.get("estado") != "verificado":
+    estado_usr = str(usuario.get("estado") or "").lower()
+    estado_kyc = str(usuario.get("estado_kyc") or "").lower()
+    if estado_usr not in ("verificado", "verificada", "aprobado", "aprobada") and estado_kyc not in ("verificado", "verificada", "aprobado", "aprobada"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No puedes solicitar una tarjeta hasta completar la verificación de identidad.",
+            detail=f"No puedes solicitar una tarjeta hasta completar la verificación de identidad. Estado actual: {usuario.get('estado') or 'desconocido'}",
         )
 
     # ── REGLA 2 y 3: Cuenta activa y pertenece al usuario ───────────────────
@@ -71,10 +97,11 @@ def solicitar_tarjeta_cliente(payload: TarjetaSolicitudCliente, db: Session = De
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Necesitas tener una cuenta bancaria activa para solicitar una tarjeta.",
         )
-    if cuenta.get("estado") != "activa":
+    estado_cuenta = str(cuenta.get("estado") or "").lower()
+    if estado_cuenta != "activa":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Necesitas tener una cuenta bancaria activa para solicitar una tarjeta.",
+            detail=f"Necesitas tener una cuenta bancaria activa para solicitar una tarjeta. Estado actual: {cuenta.get('estado') or 'desconocido'}",
         )
     if str(cuenta.get("id_usuario")) != str(payload.id_usuario):
         raise HTTPException(
@@ -93,8 +120,7 @@ def solicitar_tarjeta_cliente(payload: TarjetaSolicitudCliente, db: Session = De
         return tarjeta_existente
 
     # ── REGLA 5: Datos sensibles generados por backend ──────────────────────
-    import random
-    numero_tarjeta = "".join([str(random.randint(0, 9)) for _ in range(16)])
+    numero_tarjeta = _generar_numero_tarjeta()
 
     tarjeta = Tarjeta(
         id_cuenta=payload.id_cuenta,
@@ -102,6 +128,7 @@ def solicitar_tarjeta_cliente(payload: TarjetaSolicitudCliente, db: Session = De
         tipo_tarjeta=payload.tipo_tarjeta or "virtual",
         procesador_externo="Visa Direct / BankLite",
         estado="activa",
+        **_campos_bin(numero_tarjeta),
     )
     db.add(tarjeta)
     db.commit()
@@ -226,19 +253,42 @@ def eliminar_tarjeta(id_tarjeta: UUID, db: Session = Depends(get_db)):
 
 @router.post("/autorizar", response_model=AutorizacionOut, status_code=status.HTTP_200_OK)
 def autorizar_transaccion(payload: AutorizacionCreate, db: Session = Depends(get_db)):
+    """Autoriza una compra con tarjeta y la COBRA en el ledger.
+
+    Se aprueba solo si la tarjeta esta activa y la cuenta tiene saldo; en ese caso
+    el debito se registra en ledger-service antes de confirmar. Si el ledger no
+    responde se devuelve 503 (nunca se aprueba una compra sin poder descontarla).
+    """
     tarjeta = db.query(Tarjeta).filter(Tarjeta.id_tarjeta == payload.id_tarjeta).first()
     if not tarjeta:
         raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
 
+    monto = Decimal(str(payload.monto))
     resultado = "aprobada" if tarjeta.estado == "activa" else "rechazada"
 
+    try:
+        if resultado == "aprobada" and saldo_cuenta(tarjeta.id_cuenta) < monto:
+            resultado = "rechazada"  # fondos insuficientes
+    except LedgerUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"ledger-service no disponible: {exc}")
+
     auth = Autorizacion(
+        id_autorizacion=uuid.uuid4(),
         id_tarjeta=payload.id_tarjeta,
-        monto=payload.monto,
+        monto=monto,
         comercio=payload.comercio,
         resultado=resultado,
-        fecha_hora=datetime.utcnow()
+        fecha_hora=datetime.utcnow(),
     )
+
+    if resultado == "aprobada":
+        try:
+            cobrar_compra(str(auth.id_autorizacion), tarjeta.id_cuenta, monto)
+        except LedgerUnavailable as exc:
+            raise HTTPException(status_code=503, detail=f"ledger-service no disponible: {exc}")
+        except LedgerRejected as exc:
+            raise HTTPException(status_code=exc.status_code, detail=f"ledger-service rechazo el cobro: {exc.detail}")
+
     db.add(auth)
     db.commit()
     db.refresh(auth)
