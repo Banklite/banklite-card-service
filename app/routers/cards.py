@@ -306,11 +306,11 @@ def autorizar_transaccion(payload: AutorizacionCreate, db: Session = Depends(get
     return auth
 
 
-@router.get("/{id_tarjeta}/autorizaciones", response_model=List[AutorizacionOut])
-def listar_autorizaciones(id_tarjeta: UUID, db: Session = Depends(get_db)):
-    return db.query(Autorizacion).filter(Autorizacion.id_tarjeta == id_tarjeta).order_by(Autorizacion.fecha_hora.desc()).all()
-
-
 @router.get("/all/autorizaciones", response_model=List[AutorizacionOut])
 def listar_todas_las_autorizaciones(db: Session = Depends(get_db)):
     return db.query(Autorizacion).order_by(Autorizacion.fecha_hora.desc()).limit(50).all()
+
+
+@router.get("/{id_tarjeta}/autorizaciones", response_model=List[AutorizacionOut])
+def listar_autorizaciones(id_tarjeta: UUID, db: Session = Depends(get_db)):
+    return db.query(Autorizacion).filter(Autorizacion.id_tarjeta == id_tarjeta).order_by(Autorizacion.fecha_hora.desc()).all()
