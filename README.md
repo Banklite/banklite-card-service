@@ -91,6 +91,25 @@ uvicorn app.main:app --reload --port 8005
 
 Prueba: abre <http://localhost:8005/docs>.
 
+## Pruebas automatizadas
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests -v --cov=app --cov-report=term-missing --cov-report=html
+```
+
+No necesitan PostgreSQL, RabbitMQ ni los otros microservicios: la base es SQLite en memoria y las dependencias externas se reemplazan con mocks (`unittest.mock`). El reporte navegable queda en `htmlcov/index.html`.
+
+| Tipo | Archivo | Que verifica |
+|---|---|---|
+| Unitaria (mocks) | `tests/unit/test_bin_lookup.py` | Enriquecimiento por BIN: orden de proveedores, respaldo si el primero falla, cache y fail-open, con `httpx` simulado. |
+| Unitaria (mocks) | `tests/unit/test_ledger_client.py` | Cobro de una compra como partida doble en ledger-service; diferencia entre rechazo y caida del ledger. |
+| Integracion | `tests/integration/test_cards_api.py` | Solicitud de tarjeta (KYC, cuenta activa y propia, sin duplicados), autorizacion de compras con saldo y cobro en el ledger, evento `card.transaction.authorized`, bloqueo, congelamiento y anulacion, todo contra la base. |
+
+Resultado actual: **39 pruebas** (14 unitarias y 25 de integracion), todas aprobadas, con **84 % de cobertura** de `app/`.
+
+En GitHub Actions las pruebas corren en cada `push` y `pull request`. Si una falla, la imagen no se construye y no se despliega. El reporte de cobertura queda en el resumen de la ejecucion y como artefacto descargable `coverage-banklite-card-service`.
+
 ## Repositorios del proyecto
 
 `banklite-identity-service`, `banklite-account-service`, `banklite-ledger-service`, `banklite-transfer-service`, `banklite-card-service`, `banklite-fraud-service`, `banklite-notification-service`, `banklite-compliance-service`. Panel web: `services/web-panel` en el repositorio `banklite-microservicios`.
