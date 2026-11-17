@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import settings
+from .metrics import instrumentar
 from .database import Base, engine, get_db
 from .models import Tarjeta
 from .routers import cards
@@ -67,6 +68,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+instrumentar(app)  # metricas para Prometheus en GET /metrics
 
 app.add_middleware(
     CORSMiddleware,
